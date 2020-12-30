@@ -3,13 +3,36 @@
 #![allow(warnings)]
 
 pub struct JSONParser<'a> {
-    tokens: Vec<&'a str>
+    tokens: Vec<&'a str>,
+    token_ix: usize,
 }
 
+#[derive(Debug)]
+enum JSONValue<'a> {
+    Object,
+    Array,
+    StringLiteral(&'a str),
+    NumericLiteral(&'a str),
+    True,
+    False,
+    Null
+}
+
+#[derive(Debug)]
+struct ParseError;
+
 impl<'a> JSONParser<'a> {
-    fn parse(s: &str) -> JSONParser {
+    fn new(s: &str) -> JSONParser {
         let tokens = Self::tokenize(s);
-        JSONParser { tokens }
+        dbg!(&tokens);
+        JSONParser {
+            tokens,
+            token_ix: 0,
+        }
+    }
+
+    fn parse(&mut self) -> Result<JSONValue,ParseError> {
+        self.parseValue()
     }
 
     fn tokenize(s: &str) -> Vec<&str> {
@@ -17,43 +40,68 @@ impl<'a> JSONParser<'a> {
             .filter(|&s| s.len() > 0)
             .collect::<Vec<&str>>()
     }
-}
 
-enum Token {
-    OpenBrace,
-    CloseBrace,
-    Identifier,
-    StringLiteral,
-    NumericLiteral,
-    Comma
-}
-
-// State machine
-// State + Token -> function?
-
-// Stack
-
-impl<'a> JSONParser<'a> {
-    fn parseValue() {
-
+    fn next_token(&mut self) -> Option<&str> {
+        if self.token_ix <= self.tokens.len() {
+            let token = self.tokens[self.token_ix];
+            self.token_ix += 1;
+            Some(token)
+        } else {
+            None
+        }
     }
 
-    fn parseObject() {
-
+    fn peek_token(&mut self) -> Option<&str> {
+        if self.token_ix <= self.tokens.len() {
+            Some(self.tokens[self.token_ix])
+        } else {
+            None
+        }
     }
 
-    fn parseNameValuePairs() {
-
+    fn parseValue(&mut self) -> Result<JSONValue,ParseError> {
+        let token = self.next_token();
+        match token.unwrap() {
+            "{" => self.parseObject(),
+            "[" => self.parseArray(),
+            "\"true\"" => self.parseTrue(),
+            "\"false\"" => self.parseFalse(),
+            "\"null\"" => self.parseNull(),
+            _ => Err(ParseError),
+        }
     }
 
-    fn parseNameValuePair() {
-
+    fn parseObject(&mut self) -> Result<JSONValue,ParseError> {
+        Ok(JSONValue::Null)
     }
 
-    fn parseName() {
-
+    fn parseArray(&mut self) -> Result<JSONValue,ParseError> {
+        Ok(JSONValue::Null)
     }
 
+    fn parseTrue(&mut self) -> Result<JSONValue,ParseError> {
+        Ok(JSONValue::True)
+    }
+
+    fn parseFalse(&mut self) -> Result<JSONValue,ParseError> {
+        Ok(JSONValue::False)
+    }
+
+    fn parseNull(&mut self) -> Result<JSONValue,ParseError> {
+        Ok(JSONValue::Null)
+    }
+
+    fn parseNameValuePairs(&mut self) -> Result<JSONValue,ParseError> {
+        Ok(JSONValue::Null)
+    }
+
+    fn parseNameValuePair(&mut self) -> Result<JSONValue,ParseError> {
+        Ok(JSONValue::Null)
+    }
+
+    fn parseName(&mut self) -> Result<JSONValue,ParseError> {
+        Ok(JSONValue::Null)
+    }
 }
 
 #[test]
@@ -66,5 +114,10 @@ fn it_works() {
         age: 53
     }"#;
 
-    dbg!(JSONParser::tokenize(jsonstr));
+    let jsonstr = r#"
+    "true"
+    "#;
+
+    let mut jp = JSONParser::new(jsonstr);
+    dbg!(jp.parse());
 }
