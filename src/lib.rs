@@ -47,6 +47,15 @@ impl<'a> JSONParser<'a> {
 
     fn tokenize(s: &str) -> Vec<&str> {
         s.split(|c| c == ' ' || c == '\n')
+            .flat_map(|elem| {
+                if elem.len() > 1 && (elem.ends_with(",") || elem.ends_with(":")) {
+                    let len = elem.len();
+                    let v = vec!(&elem[..len - 1], &elem[len-1..]);
+                    v
+                } else {
+                    vec!(elem)
+                }
+            })
             .filter(|&s| s.len() > 0)
             .collect::<Vec<&str>>()
     }
@@ -82,7 +91,7 @@ impl<'a> JSONParser<'a> {
     }
 
     fn is_string(s: &str) -> bool {
-        return s.len() > 0 && s.starts_with("\"") && s.ends_with("\"")
+        return s.len() > 0 && s.starts_with("\"") && s.ends_with("\"");
     }
 
     fn is_number(s: &str) -> bool {
@@ -94,7 +103,7 @@ impl<'a> JSONParser<'a> {
         let token = token.unwrap();
 
         match token {
-            //"{" => self.parseObject(),
+            "{" => self.parseObject(),
             "[" => self.parseArray(),
             "\"true\"" => self.parseTrue(),
             "\"false\"" => self.parseFalse(),
@@ -140,6 +149,44 @@ impl<'a> JSONParser<'a> {
         }
     }
 
+    fn parseObject(&self) -> Result<JSONValue, ParseError> {
+        let mut attrs: Vec<(&str, JSONValue)> = Vec::new();
+        self.next_token(); // Eat "{"
+
+        let mut seen_comma = false;
+        loop {
+            let token = self.next_token();
+            match token {
+                None => return Err(ParseError::new("Unexpected end of input")),
+                Some("}") => return Ok(JSONValue::Object(attrs)),
+                Some(",") => {
+                    if seen_comma {
+                        return Err(ParseError::new(","));
+                    }
+                    seen_comma = true;
+                }
+                _ => {
+                    if attrs.len() > 0 && seen_comma == false {
+                        return Err(ParseError::new(","));
+                    }
+                    seen_comma = false;
+                    self.unread_token();
+
+                    let name = self.parseValue()?;
+                    let name = match name {
+                        JSONValue::StringLiteral(name) => name,
+                        _ => return Err(ParseError::new("xxx")),
+                    };
+
+                    let colon = self.next_token(); // TODO
+                    let attr = self.parseValue()?;
+
+                    attrs.push((name, attr));
+                }
+            }
+        }
+    }
+
     fn parseTrue(&self) -> Result<JSONValue, ParseError> {
         self.next_token();
         Ok(JSONValue::True)
@@ -178,6 +225,46 @@ fn it_works() {
 
     let jsonstr = r#"
     [ "true" , "false" , [ "null" ] , "adarsh" , 1.32 ]
+    "#;
+
+    let jsonstr = r#"
+    { "hello" : "world" ,
+      "red" : 1.0  , 
+       "ages" : [ 45 , 65.7e6 ] , 
+      "person" : { 
+          "name" : "adarsh"
+      }
+     }
+    "#;
+
+    let jsonstr = r#"
+    {
+        "id": "0001",
+        "type": "donut",
+        "name": "Cake",
+        "ppu": 0.55,
+        "batters":
+            {
+                "batter":
+                    [
+                        { "id": "1001", "type": "Regular" },
+                        { "id": "1002", "type": "Chocolate" },
+                        { "id": "1003", "type": "Blueberry" },
+                        { "id": "1004", "type": "Devil's Food" }
+                    ]
+            },
+        "topping":
+            [
+                { "id": "5001", "type": "None" },
+                { "id": "5002", "type": "Glazed" },
+                { "id": "5005", "type": "Sugar" },
+                { "id": "5007", "type": "Powdered Sugar" },
+                { "id": "5006", "type": "Chocolate with Sprinkles" },
+                { "id": "5003", "type": "Chocolate" },
+                { "id": "5004", "type": "Maple" }
+            ]
+    }
+    
     "#;
 
     let mut jp = JSONParser::new(jsonstr);
