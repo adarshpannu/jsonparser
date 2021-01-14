@@ -130,8 +130,7 @@ impl<'a> JSONParser<'a> {
         let mut array: Vec<JSONValue> = Vec::new();
         self.next_token(); // Eat "["
 
-        let mut token_opt = self.next_token();
-        while let Some(token) = token_opt {
+        while let Some(token) = self.next_token() {
             if token == "]" {
                 return Ok(JSONValue::Array(array));
             }
@@ -146,8 +145,6 @@ impl<'a> JSONParser<'a> {
             // Read array element
             let jv = self.parseValue()?;
             array.push(jv);
-
-            token_opt = self.next_token();
         }
         return Err(ParseError::new("Incomplete input"));
     }
