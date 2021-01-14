@@ -270,3 +270,33 @@ fn it_works() {
     let mut jp = JSONParser::new(jsonstr);
     dbg!(jp.parse());
 }
+
+struct Tokenizer<'a> {
+    str: &'a str
+}
+
+fn tokenize(str: &str) -> Vec<&str> {
+    let mut retvec: Vec<&str> = Vec::new();
+
+    for (ix, ch) in str.chars().enumerate() {
+        match ch {
+            '{'|'}'|','|':' => retvec.push(&str[ix..ix+1]),
+            '"' => {
+                retvec.push(&str[ix..ix+1])
+            }
+            '-'|'+'|'.'|'0'|'1'|'2'|'3'|'4'|'5'|'6'|'7'|'8'|'9' => {
+                retvec.push(&str[ix..ix+1])
+            },
+            _ => {
+                retvec.push(&str[ix..ix+1])
+            }
+        }
+    }
+    retvec
+}
+
+#[test]
+fn test()
+{
+
+}
