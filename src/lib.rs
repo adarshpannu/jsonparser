@@ -123,9 +123,6 @@ impl<'a> JSONParser<'a> {
         }
     }
 
-    // [ ]
-    // [ 1 ]
-    // [ 1 , 2 ]
     fn parseArray(&self) -> Result<JSONValue, ParseError> {
         let mut array: Vec<JSONValue> = Vec::new();
         self.next_token(); // Eat "["
@@ -151,40 +148,36 @@ impl<'a> JSONParser<'a> {
 
     fn parseObject(&self) -> Result<JSONValue, ParseError> {
         let mut attrs: Vec<(&str, JSONValue)> = Vec::new();
-        self.next_token(); // Eat "{"
+        self.next_token(); // Eat "["
 
-        let mut seen_comma = false;
-        loop {
-            let token = self.next_token();
-            match token {
-                None => return Err(ParseError::new("Unexpected end of input")),
-                Some("}") => return Ok(JSONValue::Object(attrs)),
-                Some(",") => {
-                    if seen_comma {
-                        return Err(ParseError::new(","));
-                    }
-                    seen_comma = true;
-                }
-                _ => {
-                    if attrs.len() > 0 && seen_comma == false {
-                        return Err(ParseError::new(","));
-                    }
-                    seen_comma = false;
-                    self.unread_token();
-
-                    let name = self.parseValue()?;
-                    let name = match name {
-                        JSONValue::StringLiteral(name) => name,
-                        _ => return Err(ParseError::new("xxx")),
-                    };
-
-                    let colon = self.next_token(); // TODO
-                    let attr = self.parseValue()?;
-
-                    attrs.push((name, attr));
-                }
+        while let Some(token) = self.next_token() {
+            if token == "}" {
+                return return Ok(JSONValue::Object(attrs));
             }
+            if attrs.len() > 0 {
+                // Read comma (",")
+                if token != "," {
+                    return Err(ParseError::new("Missing comma"));
+                }
+            } else {
+                self.unread_token();
+            }
+            // Read name:attr pair
+            let name = self.parseValue()?;
+            let name = match name {
+                JSONValue::StringLiteral(name) => name,
+                _ => return Err(ParseError::new("xxx")),
+            };
+
+            let colon = self.next_token();
+            if colon != Some(":") {
+                return Err(ParseError::new(": not found"));
+            }
+            let attr = self.parseValue()?;
+
+            attrs.push((name, attr));
         }
+        return Err(ParseError::new("Incomplete input"));
     }
 
     fn parseTrue(&self) -> Result<JSONValue, ParseError> {
@@ -224,6 +217,14 @@ fn it_works() {
     }"#;
 
     let jsonstr = r#"
+    [ "true" , "false" , [ "null" ] , "adarsh" , 1.32 ]
+    "#;
+
+    let jsonstr = r#"
+    [ 1 , 2, [ 3 ] ]
+    "#;
+
+    let jsonstr = r#"
     { "hello" : "world" ,
       "red" : 1.0  , 
        "ages" : [ 45 , 65.7e6 ] , 
@@ -231,14 +232,6 @@ fn it_works() {
           "name" : "adarsh"
       }
      }
-    "#;
-
-    let jsonstr = r#"
-    [ "true" , "false" , [ "null" ] , "adarsh" , 1.32 ]
-    "#;
-
-    let jsonstr = r#"
-    [ 1 , 2, [ 3 ] ]
     "#;
 
     let mut jp = JSONParser::new(jsonstr);
