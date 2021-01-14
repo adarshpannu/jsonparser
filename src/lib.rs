@@ -50,10 +50,10 @@ impl<'a> JSONParser<'a> {
             .flat_map(|elem| {
                 if elem.len() > 1 && (elem.ends_with(",") || elem.ends_with(":")) {
                     let len = elem.len();
-                    let v = vec!(&elem[..len - 1], &elem[len-1..]);
+                    let v = vec![&elem[..len - 1], &elem[len - 1..]];
                     v
                 } else {
-                    vec!(elem)
+                    vec![elem]
                 }
             })
             .filter(|&s| s.len() > 0)
@@ -64,7 +64,7 @@ impl<'a> JSONParser<'a> {
         let mut token_ix = self.token_ix.borrow_mut();
         let tokens = self.tokens.borrow_mut();
 
-        if *token_ix <= tokens.len() {
+        if *token_ix < tokens.len() {
             let token = tokens[*token_ix];
             *token_ix += 1;
             println!("NEXT TOKEN: {:?}", token);
@@ -76,9 +76,12 @@ impl<'a> JSONParser<'a> {
 
     fn unread_token(&self) {
         let mut token_ix = self.token_ix.borrow_mut();
+        let tokens = self.tokens.borrow_mut();
 
         if *token_ix > 0 {
             *token_ix -= 1;
+            let token = tokens[*token_ix];
+            println!("UNREAD TOKEN: {:?}", token);
         } else {
             panic!("Internal error: Already at beginning of token stream, cannot unread another token.")
         }
@@ -120,33 +123,33 @@ impl<'a> JSONParser<'a> {
         }
     }
 
+    // [ ]
+    // [ 1 ]
+    // [ 1 , 2 ]
     fn parseArray(&self) -> Result<JSONValue, ParseError> {
         let mut array: Vec<JSONValue> = Vec::new();
         self.next_token(); // Eat "["
 
-        let mut seen_comma = false;
-        loop {
-            let token = self.next_token();
-            match token {
-                None => return Err(ParseError::new("Unexpected end of input")),
-                Some("]") => return Ok(JSONValue::Array(array)),
-                Some(",") => {
-                    if seen_comma {
-                        return Err(ParseError::new(","));
-                    }
-                    seen_comma = true;
-                }
-                _ => {
-                    if array.len() > 0 && seen_comma == false {
-                        return Err(ParseError::new(","));
-                    }
-                    seen_comma = false;
-                    self.unread_token();
-                    let jv = self.parseValue()?;
-                    array.push(jv);
-                }
+        let mut token_opt = self.next_token();
+        while let Some(token) = token_opt {
+            if token == "]" {
+                return Ok(JSONValue::Array(array));
             }
+            if array.len() > 0 {
+                // Read comma (",")
+                if token != "," {
+                    return Err(ParseError::new("Missing comma"));
+                }
+            } else {
+                self.unread_token();
+            }
+            // Read array element
+            let jv = self.parseValue()?;
+            array.push(jv);
+
+            token_opt = self.next_token();
         }
+        return Err(ParseError::new("Incomplete input"));
     }
 
     fn parseObject(&self) -> Result<JSONValue, ParseError> {
@@ -224,10 +227,6 @@ fn it_works() {
     }"#;
 
     let jsonstr = r#"
-    [ "true" , "false" , [ "null" ] , "adarsh" , 1.32 ]
-    "#;
-
-    let jsonstr = r#"
     { "hello" : "world" ,
       "red" : 1.0  , 
        "ages" : [ 45 , 65.7e6 ] , 
@@ -238,33 +237,11 @@ fn it_works() {
     "#;
 
     let jsonstr = r#"
-    {
-        "id": "0001",
-        "type": "donut",
-        "name": "Cake",
-        "ppu": 0.55,
-        "batters":
-            {
-                "batter":
-                    [
-                        { "id": "1001", "type": "Regular" },
-                        { "id": "1002", "type": "Chocolate" },
-                        { "id": "1003", "type": "Blueberry" },
-                        { "id": "1004", "type": "Devil's Food" }
-                    ]
-            },
-        "topping":
-            [
-                { "id": "5001", "type": "None" },
-                { "id": "5002", "type": "Glazed" },
-                { "id": "5005", "type": "Sugar" },
-                { "id": "5007", "type": "Powdered Sugar" },
-                { "id": "5006", "type": "Chocolate with Sprinkles" },
-                { "id": "5003", "type": "Chocolate" },
-                { "id": "5004", "type": "Maple" }
-            ]
-    }
-    
+    [ "true" , "false" , [ "null" ] , "adarsh" , 1.32 ]
+    "#;
+
+    let jsonstr = r#"
+    [ 1 , 2, [ 3 ] ]
     "#;
 
     let mut jp = JSONParser::new(jsonstr);
@@ -272,7 +249,7 @@ fn it_works() {
 }
 
 struct Tokenizer<'a> {
-    str: &'a str
+    str: &'a str,
 }
 
 fn tokenize(str: &str) -> Vec<&str> {
@@ -280,23 +257,16 @@ fn tokenize(str: &str) -> Vec<&str> {
 
     for (ix, ch) in str.chars().enumerate() {
         match ch {
-            '{'|'}'|','|':' => retvec.push(&str[ix..ix+1]),
-            '"' => {
-                retvec.push(&str[ix..ix+1])
+            '{' | '}' | ',' | ':' => retvec.push(&str[ix..ix + 1]),
+            '"' => retvec.push(&str[ix..ix + 1]),
+            '-' | '+' | '.' | '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' => {
+                retvec.push(&str[ix..ix + 1])
             }
-            '-'|'+'|'.'|'0'|'1'|'2'|'3'|'4'|'5'|'6'|'7'|'8'|'9' => {
-                retvec.push(&str[ix..ix+1])
-            },
-            _ => {
-                retvec.push(&str[ix..ix+1])
-            }
+            _ => retvec.push(&str[ix..ix + 1]),
         }
     }
     retvec
 }
 
 #[test]
-fn test()
-{
-
-}
+fn test() {}
